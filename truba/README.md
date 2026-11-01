@@ -59,3 +59,17 @@ sbatch --gres=gpu:4 -c 32 truba/robo_jepa_train.slurm arena_100m_real1030c   # 4
 - W&B logs online when `WANDB_API_KEY` is exported before `sbatch` or `~/.netrc` has a wandb login. Otherwise it logs
   offline into the run folder (`wandb sync <folder>/wandb/offline-run-*`). No key is stored in the repository.
 - Job logs: `train-slurm-robo_jepa_train-<jobid>.{out,err}` in the submit directory.
+
+## Evaluate (held-out forward prediction)
+
+`scripts/evals/eval_arena_holdout.py` rolls each checkpoint forward on held-out Arena episodes and reports the
+per-step latent L1 (steps 1-9, lower is better) next to a copy-last-frame baseline; `truba/robo_jepa_eval.slurm` runs
+it (see its header for the full command). Held-out sets in `datasets_processed/robo_jepa/`:
+
+- `real1030_heldout/`: 360 `real1030_data` multi-place demos (15 per place/fruit/quota group), same scene as
+  `real1030c` but never trained on. Converted with `convert_arena.py` (30 fps).
+- `rs1030_benchmark/`: the `rs1030_*` sim benchmark rollouts of the pi0.5 policies (successes and failures), converted
+  with `scripts/data_processing/convert_arena_benchmark.py` (5 fps, both views from `raw_side_by_side.mp4`).
+  `episodes.csv` lists policy, task, phase and outcome per episode.
+
+Results land in `--out-dir` as one JSON per (set, model) and a `summary.md` table.

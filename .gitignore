@@ -46,3 +46,5 @@ app/robo_jepa/tests/
 # TRUBA job logs (truba/robo_jepa_train.slurm writes them to the submit directory)
 train-slurm-*.out
 train-slurm-*.err
+eval-slurm-*.out
+eval-slurm-*.err
