@@ -70,7 +70,9 @@ data:
         crop_width: 320
       batch_size: 4
       frames_per_clip: 16
-      min_length_to_drop: 4
+      # >= trainer.rollout_steps + 1: a clip keeps min_length_to_drop - 1 valid steps, and the
+      # random rollout prefix needs rollout_steps of them (fewer -> torch.randint(0) error).
+      min_length_to_drop: 11
       read_intermediate_frames: false
       num_workers: 8
 logging:
