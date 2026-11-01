@@ -1,0 +1,214 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+app: robo_jepa
+# ---------------------------------------------------------------------------
+# Arena finetuning of the 100M world model (K = 10 cooldown, 150k) on one GPU.
+#
+#   * Data:        episodes written by scripts/data_processing/convert_arena.py under
+#                  data.s3_prefix/<dataset s3_prefix>/ (one dataset_index.csv each).
+#                  Embodiment `franka`: the converter writes DROID's conventions (EE xyz +
+#                  euler in the robot base frame, gripper 0 = open / 1 = closed), so the
+#                  pretrained franka action/state projections carry over.
+#   * Views:       front + hand in every sample, as view ids 0 (DROID exterior) and 2 (DROID wrist).
+#   * Rate:        30 fps video, one WM step every 12 frames (fps 2.5, 0.4 s); a 16-step clip
+#                  spans 6.4 s. DROID trained `franka` at 0.8 s per step (fps 1.25 here), but
+#                  then most clips of the 5-15 s Arena episodes would be half padding.
+#   * Init:        meta.read_checkpoint, weights only (load_optimizer false): fresh AdamW, epoch 0.
+#   * Schedule:    linear warmup 0 -> 5e-5 over 500 steps, cosine to 1e-6 at 10k steps
+#                  (num_epochs 100 * ipe 100); a checkpoint every 10 epochs.
+#
+#   WANDB_MODE=disabled python -m app.main --fname configs/finetuning/arena_100m.yaml --devices cuda:0
+#
+# Other sizes: copy model.transition_model.config from configs/released/wm-<size>/config.json
+# and point meta.read_checkpoint at that size's checkpoint.
+# ---------------------------------------------------------------------------
+nodes: 1
+tasks_per_node: 1
+cpus_per_task: 16
+folder: /home/rtxpro-homerobotics/Workspace/wm/robo_jepa/logs/finetune/arena_100m/
+wandb:
+  entity: null
+  project: robo_jepa
+  name: wm-ft-arena-100m
+  'off': true
+  run_id: null
+data:
+  s3_profile: null
+  s3_prefix: ${HOME}/arena_wm_data/
+  train:
+    Arena:
+      embodiment_name: franka
+      s3_prefix: sim
+      raw_fps: 30
+      fps: 2.5
+      pose_dim: 6
+      gripper_dim: 1
+      joints_dim: 7
+      use_joint_state: false
+      cameras:
+      - front
+      - hand
+      view_map:
+        front: 0
+        hand: 2
+    weights:
+    - 1.0
+    kwargs:
+      pad_size: 64
+      augmentations:
+        random_horizontal_flip: false
+        random_resize_aspect_ratio:
+        - 1.333
+        - 1.777
+        random_resize_scale:
+        - 0.5
+        - 1.0
+        reprob: 0.0
+        auto_augment: false
+        motion_shift: false
+        crop_height: 240
+        crop_width: 320
+      batch_size: 4
+      frames_per_clip: 16
+      min_length_to_drop: 4
+      read_intermediate_frames: false
+      num_workers: 8
+logging:
+  write_tag: world_model
+loss:
+  loss_exp: 2.0
+  cos_loss_weight: 1.0
+  power_loss_weight: 0.01
+  reg_coeff:
+  - 0.0
+  no_loss_mask_tokens: false
+meta:
+  fsdp:
+    enabled: false
+    cpu_offload: false
+    mesh_layout: hsdp
+  seed: 234
+  dtype: bfloat16
+  compile: false
+  use_sdpa: true
+  eval_freq: 150
+  cooldown:
+    enabled: false
+  load_checkpoint: true
+  load_optimizer: false
+  load_checkpoint_strict: true
+  save_every_freq: 10
+  read_checkpoint: /home/rtxpro-homerobotics/Workspace/wm/robo_jepa/checkpoints/wm-100m/cooldown_100m_150k.pth.tar
+model:
+  heads: none
+  main_optimizer: transition_model
+  encoder_version: v21
+  encoder_pretrained_path: /home/rtxpro-homerobotics/Workspace/wm/robo_jepa/checkpoints/vjepa2_1_vitG_384.pt
+  pretrained_path: none
+  transition_model:
+    config:
+      action_conditioning: token
+      action_dim: 64
+      action_tokens: 1
+      attn_block_size: 64
+      attn_impl: sdpa
+      camera_extrinsics_dim: 6
+      camera_extrinsics_tokens: 0
+      decode_state: false
+      depth: 14
+      embed_dim: 1664
+      embodiment_list:
+      - franka
+      - franka_joints
+      - franka_omron
+      - franka_omron_state_delta
+      - so-101
+      - agibot_robotic
+      - franka_roboset
+      - bridge
+      - agilex
+      - robomind_franka
+      - google
+      - kuka
+      - franka_robonet
+      - baxter
+      - sawyer
+      - widowx_robonet
+      - language_table
+      - franka_fmb
+      - kuka_robonet
+      - agibot_humanoid
+      - 1x_robot
+      - franka_cart_action_key
+      - franka_joint_action_key
+      - franka_cart_vel_action_key
+      - franka_joint_vel_action_key
+      - so-101_joints
+      encoder_layernorm: true
+      grid_height: 15
+      grid_width: 20
+      local_attn_window:
+      - 8
+      - -1
+      - -1
+      norm_type: rmsnorm
+      num_frames: 16
+      num_heads: 6
+      num_kv_heads: 6
+      num_views: 2
+      patch_size: 1
+      predictor_embed_dim: 768
+      qk_norm_type: rmsnorm
+      state_dim: 64
+      state_tokens: 1
+      tubelet_size: 1
+      uniform_power: true
+      use_activation_checkpointing: true
+      use_alibi: false
+      use_dt: false
+      use_multiembodiment_proj: true
+      use_qk_norm: true
+      use_rope: true
+      use_silu: false
+      use_strong_view_conditioning: true
+      use_view_tokens: false
+      view_groups_v:
+      - 1
+      - 2
+      view_map:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+    trainer:
+      rollout_steps: 10
+      eval_rollout_steps: 10
+      rollout_stop_gradient: true
+      predictor_window_steps: 1
+      train_rollout_prefixes: random
+      rollout_fused_backward: true
+      rollout_fused_kv_cache: true
+    optimizer:
+      eps: 1e-8
+      betas:
+      - 0.9
+      - 0.95
+      ref_lr: 5.0e-05
+      warmup: 5
+      final_lr: 1.0e-06
+      start_lr: 0.0
+      clip_grad: 1.0
+      ipe_scale: 1.0
+      num_epochs: 100
+      use_radamw: false
+      weight_decay: 0.1
+      mixed_precision: true
+      final_weight_decay: 0.1
+      iterations_per_epoch: 100
