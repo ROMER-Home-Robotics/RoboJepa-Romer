@@ -14,7 +14,8 @@
 #SBATCH -C "H100|H200"
 
 # ==============================================================================
-# Held-out forward-prediction eval (scripts/evals/eval_arena_holdout.py) on TRUBA.
+# Arena evals on TRUBA: held-out forward prediction (scripts/evals/eval_arena_holdout.py,
+# the default) or action sensitivity (EVAL_SCRIPT=scripts/evals/eval_arena_actions.py).
 # Every argument is passed to the eval; --config and --encoder default to the
 # 100M weights under ROBO_JEPA_WEIGHTS (pass them to override).
 #
@@ -25,6 +26,11 @@
 #       --data sim_heldout=$D/real1030_heldout:30 benchmark=$D/rs1030_benchmark:5 \
 #       --model pretrained=$W/wm-100m/cooldown_100m_150k.pth.tar e30=$R/world_model-e30.pth.tar \
 #       --out-dir $W/evals/arena_100m_real1030c
+#
+#   sbatch --export=ALL,EVAL_SCRIPT=scripts/evals/eval_arena_actions.py truba/robo_jepa_eval.slurm \
+#       --data sim_heldout=$D/real1030_heldout:30 \
+#       --model pretrained=$W/wm-100m/cooldown_100m_150k.pth.tar final=$R/world_model-final.pth.tar \
+#       --out-dir $W/evals/arena_100m_real1030c_actions
 #
 # Results already in --out-dir are skipped, so resubmitting with more --model
 # entries only evaluates the new ones; summary.md is rewritten every time.
@@ -39,17 +45,18 @@ fi
 REPO_DIR="${REPO_DIR:-/arf/home/${CLUSTER_USER}/Workspace/wm/RoboJepa-Romer}"
 CONTAINER="${CONTAINER:-${SCRATCH}/containers/robo_jepa.sif}"
 ROBO_JEPA_WEIGHTS="${ROBO_JEPA_WEIGHTS:-${SCRATCH}/parameters/robo_jepa}"
+EVAL_SCRIPT="${EVAL_SCRIPT:-scripts/evals/eval_arena_holdout.py}"
 export APPTAINER_BIND="${APPTAINER_BIND:-/arf}"
 
 echo "robo_jepa eval | job ${SLURM_JOB_ID:-N/A} | node $(hostname) | $(date)"
-echo "args: $*"
+echo "eval: ${EVAL_SCRIPT} | args: $*"
 
 LAUNCHER=()
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     LAUNCHER=(srun)
 fi
 "${LAUNCHER[@]}" apptainer exec --nv --pwd "$REPO_DIR" --env "PYTHONPATH=${REPO_DIR}" "$CONTAINER" \
-    python scripts/evals/eval_arena_holdout.py \
+    python "$EVAL_SCRIPT" \
     --config "${ROBO_JEPA_WEIGHTS}/wm-100m/config.json" \
     --encoder "${ROBO_JEPA_WEIGHTS}/vjepa2_1_vitG_384.pt" \
     "$@"
