@@ -73,3 +73,12 @@ it (see its header for the full command). Held-out sets in `datasets_processed/r
   `episodes.csv` lists policy, task, phase and outcome per episode.
 
 Results land in `--out-dir` as one JSON per (set, model) and a `summary.md` table.
+
+## Evaluate (action sensitivity)
+
+`scripts/evals/eval_arena_actions.py` reruns the same clips and rollouts with the true actions, another episode's
+actions (`shuffle`) or zero actions, integrating the arm poses from the actions given (`shuffle_act` / `shuffle_pose`
+corrupt only one of the two inputs). A model that uses its actions gets clearly worse with wrong ones, and the
+true-action rollout should be the closer one to the real future in most samples (`win`, 0.5 = chance). Run it with
+`sbatch --export=ALL,EVAL_SCRIPT=scripts/evals/eval_arena_actions.py truba/robo_jepa_eval.slurm ...` (same
+arguments, see the header of the slurm script).
